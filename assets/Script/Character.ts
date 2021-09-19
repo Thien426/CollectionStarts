@@ -1,5 +1,5 @@
 
-import { _decorator, Component, Node, Enum, Animation } from 'cc';
+import { _decorator, Component, Animation, v3, CCFloat, KeyCode, BoxCollider2D, PhysicsSystem2D, Contact2DType, Collider2D, IPhysics2DContact, Node } from 'cc';
 const { ccclass, property } = _decorator;
 
 /**
@@ -16,9 +16,9 @@ const { ccclass, property } = _decorator;
  
 enum CharacterStatus
 {
-    Idle = 0,
-    MoveLeft = 1,
-    MoveRight = 2
+    Idle,
+    MoveLeft,
+    MoveRight
 }
 
 @ccclass('Character')
@@ -27,11 +27,32 @@ export class Character extends Component
     @property(Animation)
     moveAnimation: Animation;
 
+    @property(BoxCollider2D)
+    collider: BoxCollider2D;
+
+    @property(CCFloat)
+    jumpHeight: Number;
+
+    @property(CCFloat)
+    jumpDuration: Number;
+
+    @property(CCFloat)
+    speedMove: Number;
+
     _status: CharacterStatus;
 
     _idle: string;
     _left: string;
     _right: string;
+
+    _currentKey: KeyCode = KeyCode.NONE;
+    _listKey: KeyCode[] = [];
+
+    _isJumping: boolean = false;
+    _remainingJumpTime: number = 0;
+    _speedJump: number = 0;
+
+    _isRight: boolean = false;
 
     start ()
     {
@@ -39,21 +60,70 @@ export class Character extends Component
         this._idle = clips[CharacterStatus.Idle].name;
         this._left = clips[CharacterStatus.MoveLeft].name;
         this._right = clips[CharacterStatus.MoveRight].name;
-    }
 
-    public setIdle()
-    {
         this.setCharacterStatus(CharacterStatus.Idle);
+
+        if (PhysicsSystem2D.instance) 
+        {
+            PhysicsSystem2D.instance.on(Contact2DType.BEGIN_CONTACT, this.onBeginContact, this);
+        }
     }
 
-    public setMoveLeft()
+    onKeyDown(key: KeyCode)
     {
-        this.setCharacterStatus(CharacterStatus.MoveLeft);
+        if(key == KeyCode.ARROW_UP)
+        {
+            this.setupJump();
+            return;
+        }
+
+        if(this._currentKey == key) return;
+        
+        switch (key) 
+        {
+            case KeyCode.ARROW_LEFT:
+                this.setCharacterStatus(CharacterStatus.MoveLeft);
+                this._currentKey = key;
+                this._listKey.push(key);
+                break;
+
+            case KeyCode.ARROW_RIGHT:
+                this.setCharacterStatus(CharacterStatus.MoveRight);
+                this._currentKey = key;
+                this._listKey.push(key);
+                break;
+
+            default:
+                break;
+        }
     }
 
-    public setMoveRight()
+    onKeyUp(key: KeyCode)
     {
-        this.setCharacterStatus(CharacterStatus.MoveRight);
+        var index = this._listKey.indexOf(key);
+        if(index < 0) return;
+
+        this._listKey.splice(index, 1);
+        
+        if(this._listKey.length == 0)
+        {
+            this._currentKey = KeyCode.NONE;
+            this.setCharacterStatus(CharacterStatus.Idle);
+            return;
+        }
+
+        if(index != this._listKey.length) return;
+        
+        this.onKeyDown(this._listKey.pop());
+    }
+
+    setupJump()
+    {
+        if(this._isJumping) return;
+
+        this._isJumping = true;
+        this._remainingJumpTime = this.jumpDuration.valueOf();
+        this._speedJump = this.jumpHeight.valueOf() / this.jumpDuration.valueOf();
     }
 
     setCharacterStatus(status: CharacterStatus)
@@ -68,10 +138,12 @@ export class Character extends Component
                 break;
             
             case CharacterStatus.MoveLeft:
+                this._isRight = false;
                 this.moveAnimation.play(this._left);
                 break;
 
             case CharacterStatus.MoveRight:
+                this._isRight = true;
                 this.moveAnimation.play(this._right);
                 break;
 
@@ -79,6 +151,65 @@ export class Character extends Component
                 this.moveAnimation.play(this._idle);
                 break;
         }
+    }
+
+    onJump(dt: number)
+    {
+        if(this._isJumping == false) return;
+
+        var timeFall = Math.max(0, dt - this._remainingJumpTime);
+        var timeJump = dt - timeFall;
+        var deltaY = this._speedJump * (timeJump - timeFall);
+
+        this._remainingJumpTime = this._remainingJumpTime - timeJump;
+
+        var pos = v3(this.node.position);
+        pos.y += deltaY;
+        this.node.position = pos;
+    }
+
+    onMove(dt: number)
+    {
+        if(this._status == CharacterStatus.Idle) return;
+
+        var director = this._isRight ? 1 : -1;
+        var deltaX = director * this.speedMove.valueOf() * dt;
+
+        var pos = v3(this.node.position);
+        pos.x += deltaX;
+        this.node.position = pos;
+    }
+
+    onBeginContact (selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null)
+    {
+        switch (otherCollider.node.layer) 
+        {
+            case 2:
+                this.onContactGround(otherCollider.node);
+                break;
+        
+            default:
+                break;
+        }
+    }
+
+    onContactGround(groundNode: Node)
+    {
+        if(this._isJumping == false) return;
+
+        if(this.node.position.y >= groundNode.position.y) 
+        {
+            this._isJumping = false;
+            return;
+        }
+
+        this._remainingJumpTime = 0;
+    }
+
+    update(dt: number)
+    {
+        this.onJump(dt);
+        this.onMove(dt);
     }
 }
 
