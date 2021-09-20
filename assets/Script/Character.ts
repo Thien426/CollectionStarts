@@ -1,5 +1,5 @@
 
-import { _decorator, Component, Animation, v3, CCFloat, KeyCode, BoxCollider2D, PhysicsSystem2D, Contact2DType, Collider2D, IPhysics2DContact, Node } from 'cc';
+import { _decorator, Component, Animation, v3, CCFloat, KeyCode, BoxCollider2D, PhysicsSystem2D, Contact2DType, Collider2D, IPhysics2DContact, Node, RigidBody2D } from 'cc';
 const { ccclass, property } = _decorator;
 
 /**
@@ -21,6 +21,13 @@ enum CharacterStatus
     MoveRight
 }
 
+enum PositionContact
+{
+    On,
+    NextTo,
+    Under
+}
+
 @ccclass('Character')
 export class Character extends Component 
 {
@@ -28,7 +35,16 @@ export class Character extends Component
     moveAnimation: Animation;
 
     @property(BoxCollider2D)
-    collider: BoxCollider2D;
+    characterCollider: BoxCollider2D;
+
+    @property(BoxCollider2D)
+    headCollider: BoxCollider2D;
+
+    @property(BoxCollider2D)
+    footCollider: BoxCollider2D;
+
+    @property(RigidBody2D)
+    rigidBody: RigidBody2D;
 
     @property(CCFloat)
     jumpHeight: Number;
@@ -36,6 +52,9 @@ export class Character extends Component
     @property(CCFloat)
     jumpDuration: Number;
 
+    @property(CCFloat)
+    gravity: Number;
+    
     @property(CCFloat)
     speedMove: Number;
 
@@ -63,10 +82,10 @@ export class Character extends Component
 
         this.setCharacterStatus(CharacterStatus.Idle);
 
-        if (PhysicsSystem2D.instance) 
-        {
-            PhysicsSystem2D.instance.on(Contact2DType.BEGIN_CONTACT, this.onBeginContact, this);
-        }
+        this.rigidBody.gravityScale = this.gravity.valueOf();
+
+        this.headCollider.on(Contact2DType.BEGIN_CONTACT, this.onHeadBeginContact, this);
+        this.footCollider.on(Contact2DType.BEGIN_CONTACT, this.onFootBeginContact, this);
     }
 
     onKeyDown(key: KeyCode)
@@ -124,6 +143,7 @@ export class Character extends Component
         this._isJumping = true;
         this._remainingJumpTime = this.jumpDuration.valueOf();
         this._speedJump = this.jumpHeight.valueOf() / this.jumpDuration.valueOf();
+        this.rigidBody.gravityScale = 0;
     }
 
     setCharacterStatus(status: CharacterStatus)
@@ -180,12 +200,15 @@ export class Character extends Component
         this.node.position = pos;
     }
 
-    onBeginContact (selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null)
+    onHeadBeginContact (selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null)
     {
+        var otherLayer = otherCollider.node.layer;
+
         switch (otherCollider.node.layer) 
         {
             case 2:
-                this.onContactGround(otherCollider.node);
+                console.log("Head contact");
+                //this.onBeginContactGround(otherCollider.node);
                 break;
         
             default:
@@ -193,17 +216,95 @@ export class Character extends Component
         }
     }
 
-    onContactGround(groundNode: Node)
+    onFootBeginContact (selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null)
     {
+        var otherLayer = otherCollider.node.layer;
+
+        switch (otherCollider.node.layer) 
+        {
+            case 2:
+                console.log("Foot contact");
+                //this.onBeginContactGround(otherCollider.node);
+                break;
+        
+            default:
+                break;
+        }
+    }
+
+    onCharacterBeginContact (selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null)
+    {
+        var otherLayer = otherCollider.node.layer;
+
+        switch (otherCollider.node.layer) 
+        {
+            case 2:
+                console.log("Character contact");
+                //this.onBeginContactGround(otherCollider.node);
+                break;
+        
+            default:
+                break;
+        }
+    }
+
+    onBeginContactGround(groundNode: Node)
+    {
+        console.log("is jump: ", this._isJumping);
         if(this._isJumping == false) return;
 
-        if(this.node.position.y >= groundNode.position.y) 
+        var positionContact = this.checkPositionContact(groundNode);
+        if(positionContact == PositionContact.NextTo) return;
+        console.log("position contact: ", positionContact);
+        if(positionContact == PositionContact.Under) 
         {
-            this._isJumping = false;
+            this._remainingJumpTime = 0;
             return;
         }
 
+        // positionContact == PositionContact.On
+        this._isJumping = false;
         this._remainingJumpTime = 0;
+        this.rigidBody.gravityScale = this.gravity.valueOf();
+    }
+
+    onEndContact (selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null)
+    {
+        var otherLayer = otherCollider.node.layer;
+
+        switch (otherCollider.node.layer) 
+        {
+            case 2:
+                this._isJumping = true;
+                break;
+        
+            default:
+                break;
+        }
+    }
+
+    checkPositionContact(otherNode: Node): PositionContact
+    {
+        var posY = this.node.position.y;
+        var size = this.collider.size.y / 2;
+
+        var topCharacter = posY + size;
+        var bottomCharacter = posY - size;
+
+        posY = otherNode.position.y;
+        var otherCollider = otherNode.getComponent(BoxCollider2D);
+        size = otherCollider.size.y / 2;
+
+        var topOther = posY + size;
+        var bottomOther = posY - size;
+        console.log("topOther: ", topOther);
+        console.log("bottomOther: ", bottomOther);
+
+        if(topCharacter <= bottomOther) return PositionContact.Under;
+
+        if(bottomCharacter >= topOther) return PositionContact.On;
+
+        return PositionContact.NextTo;
     }
 
     update(dt: number)
