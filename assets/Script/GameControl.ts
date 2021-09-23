@@ -1,5 +1,5 @@
 
-import { _decorator, Component, Node, SystemEvent, systemEvent, EventKeyboard } from 'cc';
+import { _decorator, Component, Node, SystemEvent, systemEvent, EventKeyboard, Label, CCInteger } from 'cc';
 import { Character } from './Character';
 const { ccclass, property } = _decorator;
 
@@ -21,11 +21,26 @@ export class GameControl extends Component
     // [1]
     // dummy = '';
 
+    static instance: GameControl;
+
     @property(Character)
     character: Character;
 
+    @property(Label)
+    score: Label;
+
+    @property(CCInteger)
+    starScore: number;
+
+    _totalScore: number;
+
     start () 
     {
+        GameControl.instance = this;
+
+        this._totalScore = 0;
+        this.score.string = this._totalScore.toString();
+
         systemEvent.on(SystemEvent.EventType.KEY_UP, this.onKeyUp, this);
         systemEvent.on(SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);
     }
@@ -44,6 +59,12 @@ export class GameControl extends Component
     onKeyDown(event: EventKeyboard)
     {
         this.character.onKeyDown(event.keyCode);
+    }
+
+    public onCollectStar()
+    {
+        this._totalScore += this.starScore;
+        this.score.string = this._totalScore.toString();
     }
 }
 

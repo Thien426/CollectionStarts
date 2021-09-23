@@ -1,5 +1,6 @@
 
-import { _decorator, Component, Animation, v3, CCFloat, KeyCode, BoxCollider2D, PhysicsSystem2D, Contact2DType, Collider2D, IPhysics2DContact, Node, RigidBody2D } from 'cc';
+import { _decorator, Component, Animation, v3, CCFloat, KeyCode, BoxCollider2D, PhysicsSystem2D, Contact2DType, Collider2D, IPhysics2DContact, Node, RigidBody2D, Sprite } from 'cc';
+import { GameControl } from './GameControl';
 const { ccclass, property } = _decorator;
 
 /**
@@ -206,6 +207,16 @@ export class Character extends Component
                     this._isJumping = false;
                     this._remainingJumpTime = 0;
                 }
+                break;
+
+            case PositionCollider.Body:
+                if(otherLayer == 4)
+                {
+                    GameControl.instance.onCollectStar();
+                    otherCollider.enabled = false;
+                    otherCollider.getComponent(Sprite).enabled = false;
+                }
+                break;
 
             default:
                 break;
