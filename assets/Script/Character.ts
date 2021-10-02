@@ -1,5 +1,6 @@
 
 import { _decorator, Component, Animation, v3, CCFloat, KeyCode, BoxCollider2D, PhysicsSystem2D, Contact2DType, Collider2D, IPhysics2DContact, Node, RigidBody2D, Sprite } from 'cc';
+import { CollisionObject } from './CollisionObject';
 import { GameControl } from './GameControl';
 const { ccclass, property } = _decorator;
 
@@ -43,6 +44,9 @@ export class Character extends Component
 
     @property(CCFloat)
     speedMove: Number;
+
+    @property(CollisionObject)
+    collisionObject: CollisionObject;
 
     _status: CharacterStatus;
 
